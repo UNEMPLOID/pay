@@ -1,6 +1,5 @@
 import subprocess
 import sys
-import os
 import asyncio
 import re
 from selenium import webdriver
@@ -123,9 +122,7 @@ async def check_payment_gateway(update: Update, context: CallbackContext) -> Non
 async def main() -> None:
     """Run the Telegram bot."""
     install_packages()  # Install packages if not already installed
-    token = os.getenv('7379729141:AAFYATc4MLO6ZMoq3E4eikHc_DBCjO53apQ')
-    if not token:
-        raise ValueError("No bot token provided. Set the TELEGRAM_BOT_TOKEN environment variable.")
+    token = '7379729141:AAFYATc4MLO6ZMoq3E4eikHc_DBCjO53apQ'  # Hardcoded bot token
     application = ApplicationBuilder().token(token).build()
     
     application.add_handler(CommandHandler('start', start))
