@@ -123,7 +123,7 @@ async def check_payment_gateway(update: Update, context: CallbackContext) -> Non
 async def main() -> None:
     """Run the Telegram bot."""
     install_packages()  # Install packages if not already installed
-    token = os.getenv('TELEGRAM_BOT_TOKEN')
+    token = os.getenv('7379729141:AAFYATc4MLO6ZMoq3E4eikHc_DBCjO53apQ')
     if not token:
         raise ValueError("No bot token provided. Set the TELEGRAM_BOT_TOKEN environment variable.")
     application = ApplicationBuilder().token(token).build()
