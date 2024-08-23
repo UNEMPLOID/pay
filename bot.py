@@ -128,6 +128,7 @@ async def main() -> None:
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('check', check_payment_gateway))
 
+    # Use 'run_polling' directly instead of manual event loop management
     await application.run_polling()
 
 if __name__ == '__main__':
