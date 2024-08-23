@@ -1,106 +1,90 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-import logging
-import os
-import sys
+import random
+import time
+from telethon import TelegramClient, events
 import re
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-from telegram.ext.dispatcher import run_async
-import pymongo
-from luhn import verify
+import aiohttp
+import asyncio
 
-# Logging setup
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
+api_id = '26614080'  # Replace with your app api id
+api_hash = '7d2c9a5628814e1430b30a1f0dc0165b'  # Replace with your app api hash
+phone_number = '+918927738638'  # Replace with your phone number
 
-# MongoDB connection
-client = pymongo.MongoClient(os.getenv("mongodb+srv://admin22:admin22@cluster0.9lqp0ci.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"))  # MONGO DB LINK
-db = client.credit_cards
+client = TelegramClient('black_scrapper', api_id, api_hash)
 
-# Configuration
-developers = ['5606990991']
-tk = "7234133234:AAEXdgCkqsv9lAlQ6Y4H2YOeeXh5yWBe8ac"
-mode = "dev"
-posting_channel = "-1002194819681"
+BIN_API_URL = 'https://bins.antipublic.cc/bins/{}'
 
-def run(updater):
-    if mode == "dev":
-        updater.start_polling()
-        updater.idle()
-    elif mode == "prod":
-        PORT = int(os.environ.get("PORT", "8443"))
-        HEROKU_APP_NAME = os.environ.get("ccscra")
-        updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=tk)
-        updater.bot.set_webhook(f"https://{HEROKU_APP_NAME}.herokuapp.com/{tk}")
-    else:
-        sys.exit()
+# Function to filter card information using regex
+def filter_cards(text):
+    regex = r'\d{16}.*\d{3}'
+    matches = re.findall(regex, text)
+    return matches
 
-@run_async
-def start(update, context):
-    update.message.reply_text("This CC Scraper has been started successfully | Developed by [𝕭𝖔𝕲] Emilio")
-
-@run_async
-def extrct(update, context):
-    gex = ['-11111111111']  # To exclude groups from scraping
-
-    try:
-        chat_id = str(update.message.chat_id)
-    except Exception as e:
-        logger.error(f"Error extracting chat_id: {e}")
-        return
-
-    if chat_id not in gex and chat_id == posting_channel:
-        rawdata = update.message.text
-
-        filtron = "[0-9]{16}[|][0-9]{1,2}[|][0-9]{2,4}[|][0-9]{3}"
-        filtroa = "[0-9]{15}[|][0-9]{1,2}[|][0-9]{2,4}[|][0-9]{4}"
-        detectavisa = "[0-9]{16}"
-        detectamex = "[0-9]{15}"
-
-        try:
-            sacanumvisa = re.findall(detectavisa, rawdata)
-            carduno = sacanumvisa[0] if sacanumvisa else None
-            tipocard = str(carduno[0:1]) if carduno else ""
-
-            if not carduno:
-                sacanumamex = re.findall(detectamex, rawdata)
-                carduno = sacanumamex[0] if sacanumamex else None
-                tipocard = str(carduno[0:1]) if carduno else ""
-
-            if tipocard == "3":
-                x = re.findall(filtroa, rawdata)[0] if re.findall(filtroa, rawdata) else None
-            elif tipocard in "456":
-                x = re.findall(filtron, rawdata)[0] if re.findall(filtron, rawdata) else None
+# Function to perform BIN lookup
+async def bin_lookup(bin_number):
+    bin_info_url = BIN_API_URL.format(bin_number)
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
+        async with session.get(bin_info_url) as response:
+            if response.status == 200:
+                try:
+                    bin_info = await response.json()
+                    return bin_info
+                except aiohttp.ContentTypeError:
+                    return None
             else:
-                x = None
+                return None
 
-            if x:
-                card_number = x.split("|")[0]
-                check_if_cc = db.credit_card.find_one({'cc_num': card_number})
-                existe = check_if_cc is not None
+# Event handler for new messages
+@client.on(events.NewMessage)
+async def anukarop(event):
+    try:
+        message = event.message
+        # Regex to match approved messages
+        if re.search(r'(Approved!|Charged|authenticate_successful|𝗔𝗽𝗽𝗿𝗼𝘃𝗲𝗱|- 𝐀𝐩𝐩𝐫𝐨𝐯𝐞𝐝 ✅|APPROVED|New Cards Found By Scrapper|ꕥ Extrap [☭]|• New Cards Found By JennaS>)', message.text):
+            filtered_card_info = filter_cards(message.text)
+            if not filtered_card_info:
+                return
 
-                if not existe and verify(card_number):
-                    cc_data = {
-                        "bin": card_number[:6],
-                        "cc_full": x,
-                        "cc_num": card_number
-                    }
-                    db.credit_card.insert_one(cc_data)
+            start_time = time.time()  # Start timer
 
-                    card_send_formatted = f'CC: {x}'
-                    context.bot.send_message(chat_id=posting_channel, text=card_send_formatted, parse_mode='HTML')
+            for card_info in filtered_card_info:
+                bin_number = card_info[:6]
+                bin_info = await bin_lookup(bin_number)
+                if bin_info:
+                    brand = bin_info.get("brand", "N/A")
+                    card_type = bin_info.get("type", "N/A")
+                    level = bin_info.get("level", "N/A")
+                    bank = bin_info.get("bank", "N/A")
+                    country = bin_info.get("country_name", "N/A")
+                    country_flag = bin_info.get("country_flag", "")
 
-        except Exception as e:
-            logger.error(f"Error processing message: {e}")
+                    # Calculate time taken with random addition
+                    random_addition = random.uniform(0, 10) + 10  # Add random seconds between 10 and 20
+                    time_taken = time.time() - start_time + random_addition
+                    formatted_time_taken = f"{time_taken:.2f} 𝐬𝐞𝐜𝐨𝐧𝐝𝐬"
+                  
+                    # Format the message
+                    formatted_message = (
+                        f"**[-]**(t.me/blackheadsop) 𝐀𝐩𝐩𝐫𝗼𝐯𝗲𝐝 ✅\n\n"
+                        f"**[-]**(t.me/blackheadsop) 𝗖𝗮𝗿𝗱: `{card_info}`\n"
+                        f"**[-]**(t.me/blackheadsop) 𝐆𝐚𝐭𝐞𝐰𝐚𝐲: Braintree Auth 4\n"
+                        f"**[-]**(t.me/blackheadsop) 𝐑𝐞𝐬𝗽𝗼𝐧𝐬𝗲: `1000: Approved`\n\n"
+                        f"**[-]**(t.me/blackheadsop) 𝗜𝗻𝗳𝗼: {brand} - {card_type} - {level}\n"
+                        f"**[-]**(t.me/blackheadsop) 𝐈𝐬𝐬𝐮𝐞𝐫: {bank}\n"
+                        f"**[-]**(t.me/blackheadsop) 𝐂𝗼𝐮𝐧𝐭𝐫𝐲: {country} {country_flag}\n\n"
+                        f"𝗧𝗶𝗺𝗲: {formatted_time_taken}"
+                    )
 
-def main():
-    updater = Updater(tk, use_context=True)
-    dp = updater.dispatcher
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, extrct))
-    run(updater)
+                    # Send the formatted message
+                    await client.send_message('-1002194819681', formatted_message, link_preview=False)
+                    await asyncio.sleep(30)  # Wait for 30 seconds before sending the next message
+    except Exception as e:
+        print(e)
 
-if __name__ == '__main__':
-    main()
+# Main function to start the client
+async def main():
+    await client.start(phone=phone_number)
+    print("Client Created")
+    await client.run_until_disconnected()
+
+# Run the main function
+asyncio.run(main())
