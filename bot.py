@@ -22,7 +22,7 @@ db = client.credit_cards
 # Configuration
 developers = ['5606990991']
 tk = "7234133234:AAEXdgCkqsv9lAlQ6Y4H2YOeeXh5yWBe8ac"
-mode = "prod"
+mode = "dev"
 posting_channel = "-1002194819681"
 
 def run(updater):
