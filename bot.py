@@ -4,143 +4,103 @@
 import logging
 import os
 import sys
+import re
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from telegram.ext.dispatcher import run_async
-import re
-from luhn import *
 import pymongo
+from luhn import verify
 
-
-
-'''
-This bot is developed by @BARROSOE, it is the first version deployed for public scraping,
-now it is an obsolete version for my work environment, that's why I post it for free.
-
-
----------------Deploy on Heroku
-
--Secret keys: 
-	-TOKEN: 123:ABC
-	- MODE: prod
-	- CHAT_ID_FORWARD: -1111
-	- HEROKU_APP_NAME: (HEROKU APP NAME)
-'''
-
-
+# Logging setup
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-					level=logging.INFO)
-
+                    level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-client = pymongo.MongoClient(
-	
-	)# MONGO DB LINK 
+# MongoDB connection
+client = pymongo.MongoClient(os.getenv("mongodb+srv://admin22:admin22@cluster0.9lqp0ci.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"))  # MONGO DB LINK
 db = client.credit_cards
 
-developers = ['878216403']
+# Configuration
+developers = ['5606990991']
+tk = "7234133234:AAEXdgCkqsv9lAlQ6Y4H2YOeeXh5yWBe8ac"
+mode = "prod"
+posting_channel = "-1002194819681"
 
-
-addusr = ""
-tk = os.getenv("TOKEN")
-mode = os.getenv("MODE")
-
-posting_channel = os.getenv("CHAT_ID_FORWARD")
-
-if mode == "dev":
-	def run(updater):
-		updater.start_polling()
-		updater.idle()
-elif mode == "prod":
-	def run(updater):
-		PORT = int(os.environ.get("PORT", "8443"))
-		HEROKU_APP_NAME = os.environ.get("HEROKU_APP_NAME")
-		updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=tk)
-		updater.bot.set_webhook(f"https://{HEROKU_APP_NAME}.herokuapp.com/"+ tk)
-else:
-	sys.exit()
+def run(updater):
+    if mode == "dev":
+        updater.start_polling()
+        updater.idle()
+    elif mode == "prod":
+        PORT = int(os.environ.get("PORT", "8443"))
+        HEROKU_APP_NAME = os.environ.get("ccscra")
+        updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=tk)
+        updater.bot.set_webhook(f"https://{HEROKU_APP_NAME}.herokuapp.com/{tk}")
+    else:
+        sys.exit()
 
 @run_async
-def start(update):
-	update.message.reply_text("This CC Scraper has been started successfully | Developed by [𝕭𝖔𝕲] Emilio")
+def start(update, context):
+    update.message.reply_text("This CC Scraper has been started successfully | Developed by [𝕭𝖔𝕲] Emilio")
 
 @run_async
 def extrct(update, context):
-	
-	gex = ['-11111111111'] #To exclude groups from scraping
+    gex = ['-11111111111']  # To exclude groups from scraping
 
-	try:
-		chat_id = str(update.message.chat_id)
-	except:
-	   pass
-	if  chat_id not in gex:
-		if chat_id == posting_channel:	
-			rawdata = update.message.text
+    try:
+        chat_id = str(update.message.chat_id)
+    except Exception as e:
+        logger.error(f"Error extracting chat_id: {e}")
+        return
 
+    if chat_id not in gex and chat_id == posting_channel:
+        rawdata = update.message.text
 
+        filtron = "[0-9]{16}[|][0-9]{1,2}[|][0-9]{2,4}[|][0-9]{3}"
+        filtroa = "[0-9]{15}[|][0-9]{1,2}[|][0-9]{2,4}[|][0-9]{4}"
+        detectavisa = "[0-9]{16}"
+        detectamex = "[0-9]{15}"
 
-			filtron = "[0-9]{16}[|][0-9]{1,2}[|][0-9]{2,4}[|][0-9]{3}"
-			filtroa = "[0-9]{15}[|][0-9]{1,2}[|][0-9]{2,4}[|][0-9]{4}"
-			detectavisa = "[0-9]{16}"
-			detectamex = "[0-9]{15}"
-			try:
-				try:
-					sacanumvisa = re.findall(detectavisa, rawdata)
-					carduno = sacanumvisa[0]
-					tipocard = str(carduno[0:1])
-				except:
-					sacanumamex = re.findall(detectamex, rawdata)
-					carduno	= sacanumamex[0]
-					tipocard = str(carduno[0:1])
-				if tipocard == "3":
-					x = re.findall(filtroa, rawdata)[0]
-				elif tipocard == "4":
-					x = re.findall(filtron, rawdata)[0]
-				elif tipocard == "5":
-					x = re.findall(filtron, rawdata)[0]
-				elif tipocard == "6":
-					x = re.findall(filtron, rawdata)[0]
-				
-				check_if_cc = db.credit_card.find_one({'cc_num': x.split("|")[0]})
-				try:
-					card_exist_indb = str(check_if_cc['cc_num'])
-					existe = True
-				except:
-					existe = False
+        try:
+            sacanumvisa = re.findall(detectavisa, rawdata)
+            carduno = sacanumvisa[0] if sacanumvisa else None
+            tipocard = str(carduno[0:1]) if carduno else ""
 
-				check_luhn = verify(x.split("|")[0])
+            if not carduno:
+                sacanumamex = re.findall(detectamex, rawdata)
+                carduno = sacanumamex[0] if sacanumamex else None
+                tipocard = str(carduno[0:1]) if carduno else ""
 
-				if existe is False:
-					if check_luhn is True:
-						
-						cc_data = {
-							"bin": x.split("|")[0][:6],
-							"cc_full": x,
-							"cc_num": x.split("|")[0]
-						}
-						db.credit_card.insert_one(cc_data)
-						
-						card_send_formatted = f'''
-CC: {x}
-						'''
+            if tipocard == "3":
+                x = re.findall(filtroa, rawdata)[0] if re.findall(filtroa, rawdata) else None
+            elif tipocard in "456":
+                x = re.findall(filtron, rawdata)[0] if re.findall(filtron, rawdata) else None
+            else:
+                x = None
 
-						context.bot.send_message(
-							chat_id=posting_channel,
-							text=card_send_formatted,
-							parse_mode='HTML'
-						)
-			except:
-				pass
+            if x:
+                card_number = x.split("|")[0]
+                check_if_cc = db.credit_card.find_one({'cc_num': card_number})
+                existe = check_if_cc is not None
+
+                if not existe and verify(card_number):
+                    cc_data = {
+                        "bin": card_number[:6],
+                        "cc_full": x,
+                        "cc_num": card_number
+                    }
+                    db.credit_card.insert_one(cc_data)
+
+                    card_send_formatted = f'CC: {x}'
+                    context.bot.send_message(chat_id=posting_channel, text=card_send_formatted, parse_mode='HTML')
+
+        except Exception as e:
+            logger.error(f"Error processing message: {e}")
+
 def main():
-
-	updater = Updater(tk, use_context=True)
-
-
-	dp = updater.dispatcher
-
-	dp.add_handler(CommandHandler("start", start))
-	dp.add_handler(MessageHandler(Filters.text, extrct))
-	run(updater)
-
+    updater = Updater(tk, use_context=True)
+    dp = updater.dispatcher
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, extrct))
+    run(updater)
 
 if __name__ == '__main__':
-	main()
+    main()
